@@ -1,0 +1,75 @@
+# FileForge
+
+Приватный веб-конвертер и редактор файлов. **Максимум обработки происходит прямо в браузере** —
+файлы не покидают ваше устройство. Backend на Python используется только для форматов, которые
+нельзя обработать на клиенте.
+
+## Возможности
+
+### Конвертер
+- **Изображения** (Canvas API, в браузере): PNG, JPG, WEBP, BMP, GIF, AVIF, SVG, ICO, TIFF.
+  Выбор разрешения (пресеты + кастомные ширина/высота), сохранение пропорций, контроль качества.
+- **Документы** (mammoth / marked / turndown / jsPDF, в браузере): DOCX→HTML/TXT/MD/PDF,
+  MD/HTML/TXT в любом направлении, PDF→TXT. ODT/RTF — через backend (LibreOffice).
+- **Таблицы** (SheetJS, в браузере): XLSX/CSV/ODS → CSV/XLSX/HTML.
+- **Аудио/видео** (ffmpeg.wasm, в браузере): MP3/WAV/OGG/FLAC/M4A, MP4/WEBM/MOV/AVI, видео→GIF,
+  извлечение аудио.
+- Drag-and-drop, автоопределение формата, показ только валидных целей, пакетная конвертация,
+  прогресс-бар, оценка размера и времени.
+
+### PDF-редактор (всё в браузере, кроме паролей)
+- Постраничный просмотр (pdf.js)
+- Объединение, разделение (по диапазонам / по страницам)
+- Поворот, удаление, перестановка страниц
+- Текст, изображения, водяные знаки, подпись
+- Заполнение форм
+- Сжатие
+- Извлечение текста и изображений
+- PDF ↔ изображения (постранично)
+- Пароль: установка / снятие (через backend + pypdf)
+
+## Архитектура
+
+```
+frontend/   React + Vite + Tailwind. Вся клиентская обработка в src/lib/*.
+            convert.js — диспетчер, выбирающий движок (canvas / pdf / doc / sheet / ffmpeg / server).
+backend/    FastAPI. Pillow (TIFF/ICO/AVIF/GIF), LibreOffice (ODT/RTF/Office), pypdf (пароли PDF).
+```
+
+Стратегия конфиденциальности: каждая пара форматов в `frontend/src/lib/formats.js` помечена движком.
+Серверный путь (`server`) используется только когда браузер физически не может выполнить операцию,
+либо как фолбэк при сбое клиентского движка.
+
+## Запуск
+
+### Frontend
+```bash
+cd frontend
+npm install
+npm run dev          # http://localhost:5173
+```
+
+> ffmpeg.wasm требует cross-origin isolation (SharedArrayBuffer). Нужные заголовки
+> (`COOP`/`COEP`) уже настроены в `vite.config.js` для dev и preview.
+
+### Backend (опционально — нужен для ODT/RTF/TIFF/ICO и паролей PDF)
+```bash
+cd backend
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn main:app --reload --port 8000
+```
+Для офисных форматов нужен установленный `libreoffice` (headless). Frontend проксирует `/api` на
+`http://localhost:8000` (настроено в `vite.config.js`).
+
+## Сборка
+```bash
+cd frontend
+npm run build        # dist/
+npm run preview
+```
+
+## Дорожная карта
+- Извлечение именно встроенных изображений PDF (сейчас страницы рендерятся в PNG) — на backend через pypdf.
+- Запись ODS из браузера (SheetJS Pro) — пока через LibreOffice.
+- Серверный ffmpeg как фолбэк для больших видео.
