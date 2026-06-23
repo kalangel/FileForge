@@ -6,7 +6,6 @@ import {
   Minimize2,
   FileText,
   Images,
-  Lock,
   AlertTriangle,
 } from 'lucide-react'
 import { DirtyContext } from '../components/pdf/DirtyContext.js'
@@ -16,7 +15,6 @@ import SplitTool from '../components/pdf/SplitTool.jsx'
 import CompressTool from '../components/pdf/CompressTool.jsx'
 import ExtractTool from '../components/pdf/ExtractTool.jsx'
 import ConvertTool from '../components/pdf/ConvertTool.jsx'
-import PasswordTool from '../components/pdf/PasswordTool.jsx'
 
 // Grouped so the headline (the real editor) is clearly separate from
 // file-level operations and conversions.
@@ -36,11 +34,10 @@ const GROUPS = [
     ],
   },
   {
-    title: 'Конвертация и защита',
+    title: 'Конвертация',
     tools: [
       { id: 'convert', label: 'PDF ↔ Изображения', icon: Images, desc: 'Страницы в картинки и обратно' },
       { id: 'extract', label: 'Извлечь текст', icon: FileText, desc: 'Текстовый слой PDF' },
-      { id: 'password', label: 'Пароль', icon: Lock, desc: 'Установить или снять' },
     ],
   },
 ]
@@ -52,7 +49,6 @@ const PANELS = {
   compress: CompressTool,
   extract: ExtractTool,
   convert: ConvertTool,
-  password: PasswordTool,
 }
 
 export default function PdfEditor() {
@@ -77,7 +73,11 @@ export default function PdfEditor() {
     <DirtyContext.Provider value={setDirty}>
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-semibold">PDF-редактор</h1>
+          <h1 className="text-2xl font-semibold">
+            <span className="bg-gradient-to-r from-indigo-400 to-fuchsia-400 bg-clip-text text-transparent">
+              PDF-редактор
+            </span>
+          </h1>
           <p className="mt-1 text-sm text-slate-400">
             Редактируйте PDF прямо в браузере: добавляйте текст, изображения и подпись, меняйте
             страницы. Файл не покидает устройство (кроме операций с паролем).

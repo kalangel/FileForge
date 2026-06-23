@@ -17,30 +17,6 @@ export async function serverConvert(file, to, fromExt) {
   return await res.blob()
 }
 
-export async function serverPdfPassword(file, { action, password, newPassword }) {
-  const form = new FormData()
-  form.append('file', file)
-  form.append('action', action) // 'protect' | 'unlock'
-  if (password) form.append('password', password)
-  if (newPassword) form.append('new_password', newPassword)
-
-  const res = await fetch(`${API_BASE}/pdf/password`, { method: 'POST', body: form })
-  if (!res.ok) {
-    const msg = await safeError(res)
-    throw new Error(msg || `Сервер вернул ошибку ${res.status}`)
-  }
-  return await res.blob()
-}
-
-export async function serverHealthy() {
-  try {
-    const res = await fetch(`${API_BASE}/health`, { method: 'GET' })
-    return res.ok
-  } catch {
-    return false
-  }
-}
-
 async function safeError(res) {
   try {
     const data = await res.json()

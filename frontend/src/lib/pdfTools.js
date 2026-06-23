@@ -224,20 +224,39 @@ export async function getPageCount(file) {
   return doc.getPageCount()
 }
 
+// Map a font family + style to one of pdf-lib's standard 14 fonts.
+const FONT_MAP = {
+  Helvetica: [StandardFonts.Helvetica, StandardFonts.HelveticaBold, StandardFonts.HelveticaOblique, StandardFonts.HelveticaBoldOblique],
+  Times: [StandardFonts.TimesRoman, StandardFonts.TimesRomanBold, StandardFonts.TimesRomanItalic, StandardFonts.TimesRomanBoldItalic],
+  Courier: [StandardFonts.Courier, StandardFonts.CourierBold, StandardFonts.CourierOblique, StandardFonts.CourierBoldOblique],
+}
+
+function pickStandardFont(family, bold, italic) {
+  const set = FONT_MAP[family] || FONT_MAP.Helvetica
+  return set[(bold ? 1 : 0) + (italic ? 2 : 0)]
+}
+
 /**
  * Bake interactive edits into a PDF and return a Blob.
  *
  * pageOrder: [{ origIndex, rotate }]  — final page order + per-page rotation.
  * annById:   { [origIndex]: Annotation[] } where each annotation is in PDF
  *            points with a top-left origin:
- *   text  { type:'text',  x, y, text, size, color:[r,g,b] }
+ *   text  { type:'text',  x, y, text, size, color:[r,g,b], font, bold, italic }
  *   image { type:'image', x, y, w, h, bytes:Uint8Array, imgType:'png'|'jpg' }
  *   draw  { type:'draw',  color:[r,g,b], size, points:[[x,y],...] }
+ *   rect  { type:'rect',  x, y, w, h, color:[r,g,b] }  (whiteout / cover)
  */
 export async function applyEdits(file, pageOrder, annById = {}) {
   const src = await load(file)
   const out = await PDFDocument.create()
-  const font = await out.embedFont(StandardFonts.Helvetica)
+
+  // Embed each standard font lazily and cache it.
+  const fontCache = {}
+  const getFont = async (name) => {
+    if (!fontCache[name]) fontCache[name] = await out.embedFont(name)
+    return fontCache[name]
+  }
 
   const copied = await out.copyPages(src, pageOrder.map((p) => p.origIndex))
 
@@ -249,7 +268,16 @@ export async function applyEdits(file, pageOrder, annById = {}) {
     const anns = annById[origIndex] || []
 
     for (const a of anns) {
-      if (a.type === 'text') {
+      if (a.type === 'rect') {
+        page.drawRectangle({
+          x: a.x,
+          y: height - a.y - a.h,
+          width: a.w,
+          height: a.h,
+          color: rgb(a.color[0], a.color[1], a.color[2]),
+        })
+      } else if (a.type === 'text') {
+        const font = await getFont(pickStandardFont(a.font, a.bold, a.italic))
         const lines = String(a.text).split('\n')
         lines.forEach((line, li) => {
           page.drawText(line, {

@@ -163,7 +163,11 @@ export default function Converter() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">Конвертер файлов</h1>
+        <h1 className="text-2xl font-semibold">
+          <span className="bg-gradient-to-r from-indigo-400 to-fuchsia-400 bg-clip-text text-transparent">
+            Конвертер файлов
+          </span>
+        </h1>
         <p className="mt-1 text-sm text-slate-400">
           Изображения, документы, таблицы, аудио и видео. Где возможно — обработка прямо в браузере,
           без загрузки на сервер.
