@@ -60,9 +60,6 @@ export const FORMATS = {
   avi: { category: 'video', mime: 'video/x-msvideo' },
 }
 
-// Raster image formats the browser Canvas can both decode and encode.
-const RASTER_CANVAS = ['png', 'jpg', 'webp', 'bmp']
-
 // Build the per-format conversion table.
 function buildConversions() {
   const c = {}
@@ -72,19 +69,12 @@ function buildConversions() {
   }
 
   // ---- Images ----
-  // Sources decodable by the Canvas API (incl. avif/gif first frame in modern browsers).
-  const canvasDecodable = ['png', 'jpg', 'webp', 'bmp', 'gif', 'avif', 'svg']
-  for (const from of canvasDecodable) {
-    for (const to of RASTER_CANVAS) add(from, to, 'canvas')
-    add(from, 'avif', 'canvas') // encode attempt; falls back to server on failure
-    add(from, 'ico', 'canvas') // custom multi-size ICO encoder
-    add(from, 'pdf', 'canvas') // wrap image into a PDF page
-    add(from, 'gif', 'server') // animated/optimised GIF -> backend
-    add(from, 'tiff', 'server')
-  }
-  // Sources the browser cannot reliably decode -> backend.
-  for (const from of ['tiff', 'ico']) {
-    for (const to of [...RASTER_CANVAS, 'gif', 'tiff', 'pdf']) add(from, to, 'server')
+  // Every image pair runs in the browser: Canvas for raster, UTIF for TIFF
+  // (decode + encode), gifenc for GIF, a manual BMP/ICO encoder, pdf-lib for PDF.
+  const imageSources = ['png', 'jpg', 'webp', 'bmp', 'gif', 'avif', 'svg', 'tiff', 'ico']
+  const imageTargets = ['png', 'jpg', 'webp', 'bmp', 'gif', 'tiff', 'avif', 'ico', 'pdf']
+  for (const from of imageSources) {
+    for (const to of imageTargets) add(from, to, 'canvas')
   }
 
   // ---- Documents ----

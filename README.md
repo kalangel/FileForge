@@ -7,8 +7,10 @@
 ## Возможности
 
 ### Конвертер
-- **Изображения** (Canvas API, в браузере): PNG, JPG, WEBP, BMP, GIF, AVIF, SVG, ICO, TIFF.
-  Выбор разрешения (пресеты + кастомные ширина/высота), сохранение пропорций, контроль качества.
+- **Изображения** (в браузере): PNG, JPG, WEBP, BMP, GIF, AVIF, SVG, ICO, TIFF — все пары.
+  Canvas для растра, UTIF для TIFF (декод+энкод), gifenc для GIF, собственные энкодеры
+  BMP/ICO, pdf-lib для PDF. Выбор разрешения (пресеты + кастомные ширина/высота),
+  сохранение пропорций, контроль качества. Бэкенд для изображений не требуется.
 - **Документы** (mammoth / marked / turndown / jsPDF, в браузере): DOCX→HTML/TXT/MD/PDF,
   MD/HTML/TXT в любом направлении, PDF→TXT. ODT/RTF — через backend (LibreOffice).
 - **Таблицы** (SheetJS, в браузере): XLSX/CSV/ODS → CSV/XLSX/HTML.

@@ -66,6 +66,35 @@ export function uid() {
   return Math.random().toString(36).slice(2, 10)
 }
 
+const MB = 1024 * 1024
+// Soft warning / hard block thresholds per category (browser memory limits).
+const SIZE_WARN = { video: 150 * MB, audio: 80 * MB, image: 50 * MB, document: 60 * MB, spreadsheet: 60 * MB }
+const SIZE_BLOCK = { video: 600 * MB, audio: 300 * MB, image: 200 * MB }
+
+/**
+ * Pre-flight size check. Returns { block, warn, message } so the UI can warn
+ * (or refuse) before the browser tries — and possibly hangs — on a huge file.
+ */
+export function checkFileSize(bytes, category) {
+  const block = SIZE_BLOCK[category]
+  if (block && bytes > block) {
+    return {
+      block: true,
+      warn: false,
+      message: `Файл ${formatBytes(bytes)} слишком большой для обработки в браузере. Используйте файл меньше ${formatBytes(block)} или десктоп-приложение.`,
+    }
+  }
+  const warn = SIZE_WARN[category]
+  if (warn && bytes > warn) {
+    const extra =
+      category === 'video' || category === 'audio'
+        ? ' Конвертация ffmpeg идёт в браузере и может занять несколько минут.'
+        : ' Обработка может занять время.'
+    return { block: false, warn: true, message: `Большой файл (${formatBytes(bytes)}).${extra}` }
+  }
+  return { block: false, warn: false, message: null }
+}
+
 /** Bundle [{name, blob}] into a single .zip and download it. */
 export async function downloadZip(entries, zipName) {
   const JSZip = (await import('jszip')).default

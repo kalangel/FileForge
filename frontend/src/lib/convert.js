@@ -34,7 +34,7 @@ export async function runConversion(job) {
     let blob
     switch (engine) {
       case 'canvas':
-        blob = await convertImage(file, { ...options, to })
+        blob = await convertImage(file, { ...options, to, from })
         break
       case 'doc':
       case 'pdf':

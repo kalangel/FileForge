@@ -19,6 +19,7 @@ import {
   downloadBlob,
   formatDuration,
   estimateLabel,
+  checkFileSize,
   uid,
 } from '../lib/utils.js'
 import {
@@ -61,6 +62,13 @@ export default function Converter() {
       const category = getCategory(from)
       const supported = isSupported(from)
       const targets = supported ? getTargets(from) : []
+      const sizeInfo = category ? checkFileSize(file.size, category) : { block: false, warn: false }
+      const unsupported = !supported
+        ? `Формат .${from || '?'} не поддерживается`
+        : targets.length === 0
+          ? `Для .${from} нет доступных целевых форматов`
+          : null
+      const blocked = !unsupported && sizeInfo.block ? sizeInfo.message : null
       return {
         id: uid(),
         file,
@@ -69,12 +77,9 @@ export default function Converter() {
         supported,
         targets,
         to: targets[0]?.to || '',
-        status: supported && targets.length ? 'idle' : 'error',
-        error: !supported
-          ? `Формат .${from || '?'} не поддерживается`
-          : targets.length === 0
-            ? `Для .${from} нет доступных целевых форматов`
-            : null,
+        status: unsupported || blocked ? 'error' : 'idle',
+        error: unsupported || blocked,
+        warning: !unsupported && !blocked && sizeInfo.warn ? sizeInfo.message : null,
         progress: null,
         resultBlob: null,
         resultName: null,
@@ -373,8 +378,21 @@ function FileRow({ item, onTargetChange, onConvert, onRemove, onDownload, disabl
         <div className="mt-3">
           <ProgressBar
             value={item.progress}
-            label={item.progress == null ? 'Обработка…' : 'Конвертация'}
+            label={
+              item.progress == null
+                ? item.category === 'video' || item.category === 'audio'
+                  ? 'Подготовка ffmpeg (~30 МБ при первом запуске)…'
+                  : 'Обработка…'
+                : 'Конвертация'
+            }
           />
+        </div>
+      )}
+
+      {item.status === 'idle' && item.warning && (
+        <div className="mt-2 flex items-start gap-2 text-xs text-amber-400">
+          <AlertCircle size={14} className="mt-0.5 shrink-0" />
+          {item.warning}
         </div>
       )}
 

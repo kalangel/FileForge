@@ -1,9 +1,22 @@
-// Client-side image conversion using the Canvas API.
-// Nothing leaves the browser here.
+// Client-side image conversion using the Canvas API (+ UTIF for TIFF and
+// gifenc for GIF). Nothing leaves the browser here.
 
 import { getMime, normalizeExt } from './formats.js'
+import { getExtension } from './utils.js'
 
-/** Load any browser-decodable image (incl. SVG) into an HTMLImageElement. */
+/** Decode any supported image file into a full-resolution canvas. */
+async function decodeToCanvas(file, ext) {
+  if (ext === 'tiff') return decodeTiff(file)
+  // Everything else (png/jpg/webp/bmp/gif/avif/svg/ico) is browser-decodable.
+  const img = await loadImage(file)
+  const canvas = document.createElement('canvas')
+  canvas.width = img.naturalWidth || img.width
+  canvas.height = img.naturalHeight || img.height
+  if (!canvas.width || !canvas.height) throw new Error('Пустое изображение')
+  canvas.getContext('2d').drawImage(img, 0, 0)
+  return canvas
+}
+
 function loadImage(file) {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file)
@@ -20,9 +33,26 @@ function loadImage(file) {
   })
 }
 
+async function decodeTiff(file) {
+  const mod = await import('utif')
+  const UTIF = mod.default ?? mod
+  const buf = await file.arrayBuffer()
+  const ifds = UTIF.decode(buf)
+  if (!ifds.length) throw new Error('Не удалось декодировать TIFF')
+  UTIF.decodeImage(buf, ifds[0])
+  const rgba = UTIF.toRGBA8(ifds[0])
+  const w = ifds[0].width
+  const h = ifds[0].height
+  const canvas = document.createElement('canvas')
+  canvas.width = w
+  canvas.height = h
+  canvas.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(rgba), w, h), 0, 0)
+  return canvas
+}
+
 /**
  * Compute target dimensions honouring an optional aspect-ratio lock.
- * opts: { width, height, keepRatio, maxPreset }
+ * opts: { width, height, keepRatio }
  */
 export function computeDimensions(natW, natH, opts = {}) {
   let { width, height, keepRatio = true } = opts
@@ -35,7 +65,6 @@ export function computeDimensions(natW, natH, opts = {}) {
     if (width && !height) height = Math.round(width / ratio)
     else if (height && !width) width = Math.round(height * ratio)
     else {
-      // Both provided: fit within the box while preserving ratio.
       const scale = Math.min(width / natW, height / natH)
       width = Math.round(natW * scale)
       height = Math.round(natH * scale)
@@ -58,47 +87,116 @@ function canvasToBlob(canvas, mime, quality) {
 }
 
 /**
- * Convert a single image file.
- * options: { to, width, height, keepRatio, quality(0..1) }
- * Returns a Blob.
+ * Convert a single image file. Returns a Blob.
+ * options: { to, from?, width, height, keepRatio, quality(0..1) }
  */
 export async function convertImage(file, options) {
   const to = normalizeExt(options.to)
-  const img = await loadImage(file)
-  const natW = img.naturalWidth || img.width
-  const natH = img.naturalHeight || img.height
-  const { width, height } = computeDimensions(natW, natH, options)
+  const from = normalizeExt(options.from || getExtension(file.name))
+  const src = await decodeToCanvas(file, from)
+  const { width, height } = computeDimensions(src.width, src.height, options)
 
   const canvas = document.createElement('canvas')
   canvas.width = width
   canvas.height = height
   const ctx = canvas.getContext('2d')
-
-  // JPEG/BMP have no alpha; paint a white background to avoid black fills.
+  // JPEG/BMP/TIFF have no alpha here; paint white to avoid black fills.
   if (to === 'jpg' || to === 'bmp') {
     ctx.fillStyle = '#ffffff'
     ctx.fillRect(0, 0, width, height)
   }
   ctx.imageSmoothingEnabled = true
   ctx.imageSmoothingQuality = 'high'
-  ctx.drawImage(img, 0, 0, width, height)
+  ctx.drawImage(src, 0, 0, width, height)
 
-  if (to === 'ico') return encodeIco(canvas)
-  if (to === 'pdf') return imageCanvasToPdf(canvas)
-
-  const mime = getMime(to)
   const quality = typeof options.quality === 'number' ? options.quality : 0.92
-  return canvasToBlob(canvas, mime, quality)
+  switch (to) {
+    case 'ico':
+      return encodeIco(canvas)
+    case 'pdf':
+      return imageCanvasToPdf(canvas)
+    case 'gif':
+      return encodeGif(canvas)
+    case 'tiff':
+      return encodeTiff(canvas)
+    case 'bmp':
+      return encodeBmp(canvas)
+    case 'avif':
+      // Some browsers can't encode AVIF; surface a clear error.
+      return canvasToBlob(canvas, 'image/avif', quality).catch(() => {
+        throw new Error('Этот браузер не умеет кодировать AVIF — попробуйте другой формат')
+      })
+    default:
+      return canvasToBlob(canvas, getMime(to), quality)
+  }
 }
 
-/** Build a (single-image, PNG-based) .ico from a canvas. */
-async function encodeIco(srcCanvas) {
-  // ICO entries are capped at 256px per side.
-  const sizes = [256, 128, 64, 48, 32, 16].filter(
-    (s) => s <= Math.max(srcCanvas.width, srcCanvas.height) || s <= 256,
+async function encodeGif(canvas) {
+  // gifenc's export shape varies across bundlers; find the object that has the API.
+  const mod = await import('gifenc')
+  const lib = [mod, mod.default, mod.default?.default].find(
+    (o) => o && typeof o.quantize === 'function',
   )
+  const { GIFEncoder, quantize, applyPalette } = lib
+  const { width, height } = canvas
+  const data = canvas.getContext('2d').getImageData(0, 0, width, height).data
+  const palette = quantize(data, 256)
+  const index = applyPalette(data, palette)
+  const gif = GIFEncoder()
+  gif.writeFrame(index, width, height, { palette })
+  gif.finish()
+  return new Blob([gif.bytes()], { type: 'image/gif' })
+}
+
+async function encodeTiff(canvas) {
+  const mod = await import('utif')
+  const UTIF = mod.default ?? mod
+  const { width, height } = canvas
+  const rgba = canvas.getContext('2d').getImageData(0, 0, width, height).data
+  const tiff = UTIF.encodeImage(rgba.buffer, width, height)
+  return new Blob([tiff], { type: 'image/tiff' })
+}
+
+/** Minimal 24-bit BMP encoder (Canvas can't reliably toBlob image/bmp). */
+function encodeBmp(canvas) {
+  const { width: w, height: h } = canvas
+  const rgba = canvas.getContext('2d').getImageData(0, 0, w, h).data
+  const rowSize = Math.floor((24 * w + 31) / 32) * 4
+  const pixelArraySize = rowSize * h
+  const fileSize = 54 + pixelArraySize
+  const buf = new ArrayBuffer(fileSize)
+  const view = new DataView(buf)
+  // BITMAPFILEHEADER
+  view.setUint8(0, 0x42)
+  view.setUint8(1, 0x4d)
+  view.setUint32(2, fileSize, true)
+  view.setUint32(10, 54, true)
+  // BITMAPINFOHEADER
+  view.setUint32(14, 40, true)
+  view.setInt32(18, w, true)
+  view.setInt32(22, h, true)
+  view.setUint16(26, 1, true)
+  view.setUint16(28, 24, true)
+  view.setUint32(34, pixelArraySize, true)
+  const bytes = new Uint8Array(buf)
+  for (let y = 0; y < h; y++) {
+    const dstRow = 54 + (h - 1 - y) * rowSize // BMP is bottom-up
+    for (let x = 0; x < w; x++) {
+      const s = (y * w + x) * 4
+      const d = dstRow + x * 3
+      bytes[d] = rgba[s + 2] // B
+      bytes[d + 1] = rgba[s + 1] // G
+      bytes[d + 2] = rgba[s] // R
+    }
+  }
+  return new Blob([buf], { type: 'image/bmp' })
+}
+
+/** Build a (PNG-based) .ico from a canvas. */
+async function encodeIco(srcCanvas) {
+  const sizes = [256, 128, 64, 48, 32, 16]
   const pngs = []
-  for (const size of sizes.length ? sizes : [256]) {
+  for (const size of sizes) {
     const c = document.createElement('canvas')
     c.width = c.height = size
     const ctx = c.getContext('2d')
@@ -115,25 +213,22 @@ async function encodeIco(srcCanvas) {
   const buf = new ArrayBuffer(total)
   const view = new DataView(buf)
   const bytes = new Uint8Array(buf)
-
-  view.setUint16(0, 0, true) // reserved
-  view.setUint16(2, 1, true) // type: icon
+  view.setUint16(0, 0, true)
+  view.setUint16(2, 1, true)
   view.setUint16(4, count, true)
-
   pngs.forEach((p, i) => {
     const e = 6 + i * 16
-    view.setUint8(e, p.size >= 256 ? 0 : p.size) // width (0 = 256)
-    view.setUint8(e + 1, p.size >= 256 ? 0 : p.size) // height
-    view.setUint8(e + 2, 0) // palette
-    view.setUint8(e + 3, 0) // reserved
-    view.setUint16(e + 4, 1, true) // color planes
-    view.setUint16(e + 6, 32, true) // bpp
-    view.setUint32(e + 8, p.data.length, true) // size
-    view.setUint32(e + 12, offset, true) // offset
+    view.setUint8(e, p.size >= 256 ? 0 : p.size)
+    view.setUint8(e + 1, p.size >= 256 ? 0 : p.size)
+    view.setUint8(e + 2, 0)
+    view.setUint8(e + 3, 0)
+    view.setUint16(e + 4, 1, true)
+    view.setUint16(e + 6, 32, true)
+    view.setUint32(e + 8, p.data.length, true)
+    view.setUint32(e + 12, offset, true)
     bytes.set(p.data, offset)
     offset += p.data.length
   })
-
   return new Blob([buf], { type: 'image/x-icon' })
 }
 
