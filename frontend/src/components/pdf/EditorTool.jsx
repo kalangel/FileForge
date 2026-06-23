@@ -7,6 +7,7 @@ import {
   Square,
   Bold,
   Italic,
+  Upload,
   Trash2,
   RotateCw,
   RotateCcw,
@@ -20,6 +21,7 @@ import { useDirtyFile } from './DirtyContext.js'
 import { loadPdf, renderPageToCanvas, renderPageToDataUrl } from '../../lib/pdfRender.js'
 import { applyEdits } from '../../lib/pdfTools.js'
 import { downloadBlob, formatBytes, uid } from '../../lib/utils.js'
+import { fontGroups, cssFamilyFor, registerCustomFont } from '../../lib/fonts.js'
 
 // ---- colour helpers (hex <-> 0..1 rgb) ----
 function hexToRgb(hex) {
@@ -27,13 +29,6 @@ function hexToRgb(hex) {
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => v / 255)
 }
 const rgbToCss = (c) => `rgb(${c.map((v) => Math.round(v * 255)).join(',')})`
-
-const FONTS = ['Helvetica', 'Times', 'Courier']
-const FONT_CSS = {
-  Helvetica: 'Helvetica, Arial, sans-serif',
-  Times: '"Times New Roman", Times, serif',
-  Courier: '"Courier New", Courier, monospace',
-}
 
 const MAX_W = 820 // max on-screen page width in px
 
@@ -54,6 +49,7 @@ export default function EditorTool() {
   const [font, setFont] = useState('Helvetica')
   const [bold, setBold] = useState(false)
   const [italic, setItalic] = useState(false)
+  const [groups, setGroups] = useState(() => fontGroups())
   const [selectedId, setSelectedId] = useState(null)
   const [editingId, setEditingId] = useState(null)
   const [stroke, setStroke] = useState(null) // freehand in px
@@ -64,6 +60,10 @@ export default function EditorTool() {
   const stageRef = useRef(null)
   const dragRef = useRef(null)
   const fileInputRef = useRef(null)
+  const fontInputRef = useRef(null)
+
+  const allFonts = useMemo(() => groups.flatMap((g) => g.fonts), [groups])
+  const currentFontNote = allFonts.find((f) => f.id === font)?.note
 
   useDirtyFile(Boolean(file))
 
@@ -72,6 +72,9 @@ export default function EditorTool() {
   const anns = useMemo(() => (origIndex != null ? annById[origIndex] || [] : []), [annById, origIndex])
   const selected = anns.find((a) => a.id === selectedId) || null
   const ctx = selected?.type || (mode === 'select' ? null : mode)
+  // Objects stay clickable for selection in cursor and text modes; in
+  // draw/rect modes they pass pointer events through so you can draw over them.
+  const annClickable = mode === 'select' || mode === 'text'
 
   async function loadFile(files) {
     const f = files[0]
@@ -218,6 +221,37 @@ export default function EditorTool() {
     else patchAnn(d.id, { w: newW, h: Math.max(6, d.h0 + pxToPt(p.y - d.sy)) })
   }
 
+  function applyFont(id) {
+    setFont(id)
+    cssFamilyFor(id, bold, italic) // make sure the @font-face is injected
+    if (selected?.type === 'text') patchAnn(selected.id, { font: id })
+  }
+
+  async function onPickFont(e) {
+    const f = e.target.files?.[0]
+    e.target.value = ''
+    if (!f) return
+    try {
+      const id = await registerCustomFont(f)
+      setGroups(fontGroups())
+      applyFont(id)
+    } catch (err) {
+      setError('Не удалось загрузить шрифт: ' + (err?.message || ''))
+    }
+  }
+
+  // Click an annotation: select it (switching to cursor mode if needed);
+  // a second click on an already-selected text box starts editing.
+  function selectAnn(e, a) {
+    e.stopPropagation()
+    if (mode === 'select' && selectedId === a.id && a.type === 'text') {
+      setEditingId(a.id)
+      return
+    }
+    setSelectedId(a.id)
+    if (mode !== 'select') setMode('select')
+  }
+
   async function onPickImage(e) {
     const f = e.target.files?.[0]
     e.target.value = ''
@@ -319,13 +353,23 @@ export default function EditorTool() {
           <>
             <select
               value={font}
-              onChange={(e) => { setFont(e.target.value); patchSelectedIfText({ font: e.target.value }) }}
-              className="input w-32 py-1"
+              onChange={(e) => applyFont(e.target.value)}
+              className="input w-40 py-1"
+              title="Шрифт"
             >
-              {FONTS.map((f) => (
-                <option key={f} value={f}>{f}</option>
+              {groups.map((g) => (
+                <optgroup key={g.group} label={g.group}>
+                  {g.fonts.map((f) => (
+                    <option key={f.id} value={f.id}>{f.label}</option>
+                  ))}
+                </optgroup>
               ))}
             </select>
+            <button
+              onClick={() => fontInputRef.current?.click()}
+              className="rounded p-1.5 bg-ink-800 text-slate-300 hover:bg-ink-700"
+              title="Загрузить свой шрифт (.ttf/.otf)"
+            ><Upload size={15} /></button>
             <button
               onClick={() => { const v = !bold; setBold(v); patchSelectedIfText({ bold: v }) }}
               className={['rounded p-1.5', bold ? 'bg-accent text-white' : 'bg-ink-800 text-slate-300 hover:bg-ink-700'].join(' ')}
@@ -356,7 +400,12 @@ export default function EditorTool() {
         )}
 
         <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={onPickImage} />
+        <input ref={fontInputRef} type="file" accept=".ttf,.otf,font/ttf,font/otf" className="hidden" onChange={onPickFont} />
       </div>
+
+      {ctx === 'text' && currentFontNote && (
+        <p className="text-xs text-amber-400/80">{currentFontNote}</p>
+      )}
 
       <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-slate-400">
         <span>{file.name} · {formatBytes(file.size)} · {pageOrder.length} стр.</span>
@@ -392,8 +441,8 @@ export default function EditorTool() {
                 <div
                   key={a.id}
                   onPointerDown={(e) => startDrag(e, a)}
-                  onClick={(e) => { e.stopPropagation(); if (mode === 'select') setSelectedId(a.id) }}
-                  className={['absolute', mode === 'select' ? 'cursor-move' : 'pointer-events-none', selectedId === a.id ? 'ring-1 ring-accent' : ''].join(' ')}
+                  onClick={(e) => selectAnn(e, a)}
+                  className={['absolute', annClickable ? (mode === 'select' ? 'cursor-move' : 'cursor-pointer') : 'pointer-events-none', selectedId === a.id ? 'ring-1 ring-accent' : ''].join(' ')}
                   style={{ left: ptToPx(a.x), top: ptToPx(a.y), width: ptToPx(a.w), height: ptToPx(a.h), background: rgbToCss(a.color) }}
                 >
                   {selectedId === a.id && mode === 'select' && (
@@ -409,8 +458,8 @@ export default function EditorTool() {
                     key={a.id}
                     points={a.points.map(([x, y]) => `${ptToPx(x)},${ptToPx(y)}`).join(' ')}
                     fill="none" stroke={rgbToCss(a.color)} strokeWidth={ptToPx(a.size)} strokeLinejoin="round" strokeLinecap="round"
-                    onClick={(e) => { e.stopPropagation(); if (mode === 'select') setSelectedId(a.id) }}
-                    style={{ pointerEvents: mode === 'select' ? 'stroke' : 'none' }}
+                    onClick={(e) => selectAnn(e, a)}
+                    style={{ pointerEvents: annClickable ? 'stroke' : 'none' }}
                   />
                 ))}
                 {stroke && (
@@ -431,7 +480,7 @@ export default function EditorTool() {
                   <div
                     key={a.id}
                     onPointerDown={(e) => startDrag(e, a)}
-                    onClick={(e) => { e.stopPropagation(); if (mode === 'select') setSelectedId(a.id) }}
+                    onClick={(e) => selectAnn(e, a)}
                     onDoubleClick={(e) => { e.stopPropagation(); setEditingId(a.id); setSelectedId(a.id) }}
                     contentEditable={editingId === a.id}
                     suppressContentEditableWarning
@@ -442,10 +491,10 @@ export default function EditorTool() {
                       else patchAnn(a.id, { text: t })
                     }}
                     ref={editingId === a.id ? (el) => el && focusEnd(el) : undefined}
-                    className={['absolute whitespace-pre leading-tight outline-none', mode === 'select' ? 'cursor-move' : 'pointer-events-none', selectedId === a.id ? 'ring-1 ring-accent' : ''].join(' ')}
+                    className={['absolute whitespace-pre leading-tight outline-none', editingId === a.id ? 'cursor-text ring-1 ring-accent' : annClickable ? (mode === 'select' ? 'cursor-move' : 'cursor-pointer') : 'pointer-events-none', selectedId === a.id && editingId !== a.id ? 'ring-1 ring-accent' : ''].join(' ')}
                     style={{
                       left: ptToPx(a.x), top: ptToPx(a.y), fontSize: ptToPx(a.size), color: rgbToCss(a.color),
-                      fontFamily: FONT_CSS[a.font] || FONT_CSS.Helvetica,
+                      fontFamily: cssFamilyFor(a.font, a.bold, a.italic),
                       fontWeight: a.bold ? 700 : 400, fontStyle: a.italic ? 'italic' : 'normal',
                     }}
                   >
@@ -455,8 +504,8 @@ export default function EditorTool() {
                   <div
                     key={a.id}
                     onPointerDown={(e) => startDrag(e, a)}
-                    onClick={(e) => { e.stopPropagation(); if (mode === 'select') setSelectedId(a.id) }}
-                    className={['absolute', mode === 'select' ? 'cursor-move' : 'pointer-events-none', selectedId === a.id ? 'ring-1 ring-accent' : ''].join(' ')}
+                    onClick={(e) => selectAnn(e, a)}
+                    className={['absolute', annClickable ? (mode === 'select' ? 'cursor-move' : 'cursor-pointer') : 'pointer-events-none', selectedId === a.id ? 'ring-1 ring-accent' : ''].join(' ')}
                     style={{ left: ptToPx(a.x), top: ptToPx(a.y), width: ptToPx(a.w), height: ptToPx(a.h) }}
                   >
                     <img src={a.dataUrl} alt="" className="h-full w-full" draggable={false} />

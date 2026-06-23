@@ -225,16 +225,7 @@ export async function getPageCount(file) {
 }
 
 // Map a font family + style to one of pdf-lib's standard 14 fonts.
-const FONT_MAP = {
-  Helvetica: [StandardFonts.Helvetica, StandardFonts.HelveticaBold, StandardFonts.HelveticaOblique, StandardFonts.HelveticaBoldOblique],
-  Times: [StandardFonts.TimesRoman, StandardFonts.TimesRomanBold, StandardFonts.TimesRomanItalic, StandardFonts.TimesRomanBoldItalic],
-  Courier: [StandardFonts.Courier, StandardFonts.CourierBold, StandardFonts.CourierOblique, StandardFonts.CourierBoldOblique],
-}
-
-function pickStandardFont(family, bold, italic) {
-  const set = FONT_MAP[family] || FONT_MAP.Helvetica
-  return set[(bold ? 1 : 0) + (italic ? 2 : 0)]
-}
+import { isStandard, standardFontName, embedBytes } from './fonts.js'
 
 /**
  * Bake interactive edits into a PDF and return a Blob.
@@ -251,11 +242,34 @@ export async function applyEdits(file, pageOrder, annById = {}) {
   const src = await load(file)
   const out = await PDFDocument.create()
 
-  // Embed each standard font lazily and cache it.
+  // Register fontkit so we can embed custom/bundled TTFs.
+  let fontkitReady = false
+  const ensureFontkit = async () => {
+    if (fontkitReady) return
+    const fontkit = (await import('@pdf-lib/fontkit')).default
+    out.registerFontkit(fontkit)
+    fontkitReady = true
+  }
+
+  // Embed each font lazily and cache it.
   const fontCache = {}
-  const getFont = async (name) => {
-    if (!fontCache[name]) fontCache[name] = await out.embedFont(name)
-    return fontCache[name]
+  const getFont = async (id, bold, italic) => {
+    const key = `${id}-${bold ? 'b' : ''}${italic ? 'i' : ''}`
+    if (fontCache[key]) return fontCache[key]
+    let font
+    if (isStandard(id)) {
+      font = await out.embedFont(standardFontName(id, bold, italic))
+    } else {
+      const bytes = await embedBytes(id, bold, italic)
+      if (bytes) {
+        await ensureFontkit()
+        font = await out.embedFont(bytes, { subset: true })
+      } else {
+        font = await out.embedFont(standardFontName('Helvetica', bold, italic))
+      }
+    }
+    fontCache[key] = font
+    return font
   }
 
   const copied = await out.copyPages(src, pageOrder.map((p) => p.origIndex))
@@ -277,7 +291,7 @@ export async function applyEdits(file, pageOrder, annById = {}) {
           color: rgb(a.color[0], a.color[1], a.color[2]),
         })
       } else if (a.type === 'text') {
-        const font = await getFont(pickStandardFont(a.font, a.bold, a.italic))
+        const font = await getFont(a.font || 'Helvetica', a.bold, a.italic)
         const lines = String(a.text).split('\n')
         lines.forEach((line, li) => {
           page.drawText(line, {
