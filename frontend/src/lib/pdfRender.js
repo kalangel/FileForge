@@ -14,9 +14,11 @@ export async function loadPdf(input) {
 }
 
 /** Render a single page to a canvas and return it. */
-export async function renderPageToCanvas(pdf, pageNum, scale = 1.2) {
+export async function renderPageToCanvas(pdf, pageNum, scale = 1.2, rotation) {
   const page = await pdf.getPage(pageNum)
-  const viewport = page.getViewport({ scale })
+  const viewport = page.getViewport(
+    rotation == null ? { scale } : { scale, rotation },
+  )
   const canvas = document.createElement('canvas')
   canvas.width = Math.ceil(viewport.width)
   canvas.height = Math.ceil(viewport.height)

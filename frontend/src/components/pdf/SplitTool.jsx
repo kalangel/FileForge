@@ -3,6 +3,7 @@ import { Download, Loader2, Scissors } from 'lucide-react'
 import Dropzone from '../Dropzone.jsx'
 import { splitPdf, explodePages, getPageCount } from '../../lib/pdfTools.js'
 import { downloadBlob, downloadZip, formatBytes } from '../../lib/utils.js'
+import { useDirtyFile } from './DirtyContext.js'
 
 /** Parse "1-3, 5, 8-10" into [[1,3],[5,5],[8,10]]. */
 function parseRanges(input, max) {
@@ -24,6 +25,7 @@ export default function SplitTool() {
   const [ranges, setRanges] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
+  useDirtyFile(Boolean(file))
 
   async function load(files) {
     const f = files[0]

@@ -3,11 +3,13 @@ import { ArrowUp, ArrowDown, X, Download, Loader2, Combine } from 'lucide-react'
 import Dropzone from '../Dropzone.jsx'
 import { mergePdfs } from '../../lib/pdfTools.js'
 import { downloadBlob, formatBytes, uid } from '../../lib/utils.js'
+import { useDirtyFile } from './DirtyContext.js'
 
 export default function MergeTool() {
   const [files, setFiles] = useState([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
+  useDirtyFile(files.length > 0)
 
   const add = (list) =>
     setFiles((prev) => [...prev, ...list.map((file) => ({ id: uid(), file }))])

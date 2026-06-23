@@ -3,6 +3,7 @@ import { Download, Loader2, Lock, Unlock, Cloud, AlertTriangle } from 'lucide-re
 import Dropzone from '../Dropzone.jsx'
 import { serverPdfPassword, serverHealthy } from '../../lib/serverClient.js'
 import { downloadBlob, formatBytes } from '../../lib/utils.js'
+import { useDirtyFile } from './DirtyContext.js'
 
 export default function PasswordTool() {
   const [file, setFile] = useState(null)
@@ -11,6 +12,7 @@ export default function PasswordTool() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const [online, setOnline] = useState(null)
+  useDirtyFile(Boolean(file))
 
   useEffect(() => {
     serverHealthy().then(setOnline)

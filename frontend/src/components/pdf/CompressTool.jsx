@@ -3,6 +3,7 @@ import { Download, Loader2, Minimize2 } from 'lucide-react'
 import Dropzone from '../Dropzone.jsx'
 import { compressPdf } from '../../lib/pdfTools.js'
 import { downloadBlob, formatBytes } from '../../lib/utils.js'
+import { useDirtyFile } from './DirtyContext.js'
 
 const LEVELS = {
   low: { label: 'Лёгкое (лучше качество)', scale: 1.5, quality: 0.8 },
@@ -16,6 +17,7 @@ export default function CompressTool() {
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState(null)
   const [error, setError] = useState(null)
+  useDirtyFile(Boolean(file))
 
   async function run() {
     setBusy(true)

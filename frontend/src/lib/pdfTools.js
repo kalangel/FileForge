@@ -223,3 +223,70 @@ export async function getPageCount(file) {
   const doc = await load(file)
   return doc.getPageCount()
 }
+
+/**
+ * Bake interactive edits into a PDF and return a Blob.
+ *
+ * pageOrder: [{ origIndex, rotate }]  — final page order + per-page rotation.
+ * annById:   { [origIndex]: Annotation[] } where each annotation is in PDF
+ *            points with a top-left origin:
+ *   text  { type:'text',  x, y, text, size, color:[r,g,b] }
+ *   image { type:'image', x, y, w, h, bytes:Uint8Array, imgType:'png'|'jpg' }
+ *   draw  { type:'draw',  color:[r,g,b], size, points:[[x,y],...] }
+ */
+export async function applyEdits(file, pageOrder, annById = {}) {
+  const src = await load(file)
+  const out = await PDFDocument.create()
+  const font = await out.embedFont(StandardFonts.Helvetica)
+
+  const copied = await out.copyPages(src, pageOrder.map((p) => p.origIndex))
+
+  for (let i = 0; i < copied.length; i++) {
+    const page = copied[i]
+    out.addPage(page)
+    const { origIndex, rotate } = pageOrder[i]
+    const { height } = page.getSize()
+    const anns = annById[origIndex] || []
+
+    for (const a of anns) {
+      if (a.type === 'text') {
+        const lines = String(a.text).split('\n')
+        lines.forEach((line, li) => {
+          page.drawText(line, {
+            x: a.x,
+            y: height - a.y - a.size - li * a.size * 1.2,
+            size: a.size,
+            font,
+            color: rgb(a.color[0], a.color[1], a.color[2]),
+          })
+        })
+      } else if (a.type === 'image') {
+        let img
+        try {
+          img = a.imgType === 'png' ? await out.embedPng(a.bytes) : await out.embedJpg(a.bytes)
+        } catch {
+          continue
+        }
+        page.drawImage(img, { x: a.x, y: height - a.y - a.h, width: a.w, height: a.h })
+      } else if (a.type === 'draw' && a.points.length > 1) {
+        for (let k = 1; k < a.points.length; k++) {
+          const [x1, y1] = a.points[k - 1]
+          const [x2, y2] = a.points[k]
+          page.drawLine({
+            start: { x: x1, y: height - y1 },
+            end: { x: x2, y: height - y2 },
+            thickness: a.size,
+            color: rgb(a.color[0], a.color[1], a.color[2]),
+          })
+        }
+      }
+    }
+
+    if (rotate) {
+      const cur = page.getRotation().angle
+      page.setRotation(degrees((cur + rotate) % 360))
+    }
+  }
+
+  return toBlob(await out.save())
+}

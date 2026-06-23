@@ -4,6 +4,7 @@ import Dropzone from '../Dropzone.jsx'
 import { extractText } from '../../lib/pdfRender.js'
 import { pdfToImages } from '../../lib/pdfTools.js'
 import { downloadBlob, downloadZip, formatBytes } from '../../lib/utils.js'
+import { useDirtyFile } from './DirtyContext.js'
 
 export default function ExtractTool() {
   const [file, setFile] = useState(null)
@@ -11,6 +12,7 @@ export default function ExtractTool() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const [copied, setCopied] = useState(false)
+  useDirtyFile(Boolean(file))
 
   async function load(files) {
     const f = files[0]

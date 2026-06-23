@@ -3,6 +3,7 @@ import { Download, Loader2, Images, FileOutput } from 'lucide-react'
 import Dropzone from '../Dropzone.jsx'
 import { pdfToImages, imagesToPdf } from '../../lib/pdfTools.js'
 import { downloadBlob, downloadZip, formatBytes } from '../../lib/utils.js'
+import { useDirtyFile } from './DirtyContext.js'
 
 export default function ConvertTool() {
   const [mode, setMode] = useState('toImages') // 'toImages' | 'toPdf'
@@ -28,6 +29,7 @@ function PdfToImages() {
   const [scale, setScale] = useState(2)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
+  useDirtyFile(Boolean(file))
 
   async function run() {
     setBusy(true)
@@ -77,6 +79,7 @@ function ImagesToPdf() {
   const [files, setFiles] = useState([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
+  useDirtyFile(files.length > 0)
 
   async function run() {
     setBusy(true)
