@@ -29,7 +29,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ---- Format helpers ---------------------------------------------------------
+# Format helpers
 
 MIME = {
     "png": "image/png",
@@ -63,7 +63,7 @@ def _stream(data: bytes, target: str, name: str) -> StreamingResponse:
     )
 
 
-# ---- Image conversion (Pillow) ---------------------------------------------
+# Image conversion (Pillow)
 
 def convert_image(data: bytes, target: str) -> bytes:
     from PIL import Image
@@ -105,7 +105,7 @@ def convert_image(data: bytes, target: str) -> bytes:
     return out.getvalue()
 
 
-# ---- Office conversion (LibreOffice headless) ------------------------------
+# Office conversion (LibreOffice headless)
 
 def libreoffice_available() -> bool:
     return shutil.which("libreoffice") is not None or shutil.which("soffice") is not None
@@ -136,7 +136,7 @@ def convert_office(data: bytes, source: str, target: str) -> bytes:
             return f.read()
 
 
-# ---- Routes -----------------------------------------------------------------
+# Routes
 
 @app.get("/api/health")
 def health():

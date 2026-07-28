@@ -68,16 +68,15 @@ function buildConversions() {
     if (from !== to) c[from].push({ to, engine })
   }
 
-  // ---- Images ----
-  // Every image pair runs in the browser: Canvas for raster, UTIF for TIFF
-  // (decode + encode), gifenc for GIF, a manual BMP/ICO encoder, pdf-lib for PDF.
+  // Images: every pair runs in the browser (Canvas for raster, UTIF for TIFF
+  // decode/encode, gifenc for GIF, a manual BMP/ICO encoder, pdf-lib for PDF).
   const imageSources = ['png', 'jpg', 'webp', 'bmp', 'gif', 'avif', 'svg', 'tiff', 'ico']
   const imageTargets = ['png', 'jpg', 'webp', 'bmp', 'gif', 'tiff', 'avif', 'ico', 'pdf']
   for (const from of imageSources) {
     for (const to of imageTargets) add(from, to, 'canvas')
   }
 
-  // ---- Documents ----
+  // Documents
   add('md', 'html', 'doc')
   add('md', 'txt', 'doc')
   add('md', 'pdf', 'doc')
@@ -103,7 +102,7 @@ function buildConversions() {
   add('rtf', 'txt', 'server')
   add('pdf', 'docx', 'server')
 
-  // ---- Spreadsheets ----
+  // Spreadsheets
   add('xlsx', 'csv', 'sheet')
   add('xlsx', 'html', 'sheet')
   add('csv', 'xlsx', 'sheet')
@@ -113,11 +112,11 @@ function buildConversions() {
   add('xlsx', 'ods', 'server')
   add('csv', 'ods', 'server')
 
-  // ---- Audio (ffmpeg.wasm) ----
+  // Audio (ffmpeg.wasm)
   const audio = ['mp3', 'wav', 'ogg', 'flac', 'm4a']
   for (const from of audio) for (const to of audio) add(from, to, 'ffmpeg')
 
-  // ---- Video (ffmpeg.wasm) ----
+  // Video (ffmpeg.wasm)
   const video = ['mp4', 'webm', 'mov', 'avi']
   for (const from of video) {
     for (const to of video) add(from, to, 'ffmpeg')

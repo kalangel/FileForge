@@ -2,7 +2,7 @@
 // conversion table in formats.js. Falls back to the server when a
 // client-side engine fails or isn't available.
 
-import { getTargets, normalizeExt, getCategory } from './formats.js'
+import { getTargets, normalizeExt } from './formats.js'
 import { convertImage } from './imageConverter.js'
 import { convertDocument, convertSpreadsheet } from './docConverter.js'
 import { convertMedia } from './mediaConverter.js'
@@ -67,11 +67,3 @@ export async function runConversion(job) {
     throw err
   }
 }
-
-/** Whether a conversion runs without ever touching the network. */
-export function isClientSide(fromExt, to) {
-  const e = engineFor(fromExt, to)
-  return e && e !== 'server'
-}
-
-export { getCategory }

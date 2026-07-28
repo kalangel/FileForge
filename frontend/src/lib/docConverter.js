@@ -6,7 +6,7 @@
 
 import { normalizeExt } from './formats.js'
 
-// ---------- Documents ----------
+// Documents
 
 async function fileToText(file) {
   return await file.text()
@@ -111,7 +111,7 @@ function wrapHtml(body) {
   return `<!doctype html><html><head><meta charset="utf-8"></head><body>${body}</body></html>`
 }
 
-// ---------- Spreadsheets ----------
+// Spreadsheets
 
 export async function convertSpreadsheet(file, to, fromExt) {
   const XLSX = await import('xlsx')

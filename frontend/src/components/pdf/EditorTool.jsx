@@ -23,7 +23,7 @@ import { applyEdits } from '../../lib/pdfTools.js'
 import { downloadBlob, formatBytes, uid } from '../../lib/utils.js'
 import { fontGroups, cssFamilyFor, registerCustomFont } from '../../lib/fonts.js'
 
-// ---- colour helpers (hex <-> 0..1 rgb) ----
+// Colour helpers (hex <-> 0..1 rgb)
 function hexToRgb(hex) {
   const n = parseInt(hex.slice(1), 16)
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => v / 255)

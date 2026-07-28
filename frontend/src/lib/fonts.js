@@ -10,7 +10,7 @@
 
 import { StandardFonts } from 'pdf-lib'
 
-// ---- bundled font files (Vite turns these into hashed asset URLs) ----
+// Bundled font files (Vite turns these into hashed asset URLs).
 // Only the four styles we use, so the build doesn't pull in every weight.
 const U = import.meta.glob(
   [
