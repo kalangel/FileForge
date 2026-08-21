@@ -1,4 +1,5 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
+import { Analytics } from '@vercel/analytics/react'
 import Navbar from './components/Navbar.jsx'
 import Converter from './pages/Converter.jsx'
 import PdfEditor from './pages/PdfEditor.jsx'
@@ -20,6 +21,7 @@ export default function App() {
       <footer className="border-t border-ink-800 px-4 py-4 text-center text-xs text-slate-500">
         FileForge — обработка файлов прямо в браузере. Ваши файлы не покидают устройство, если не указано иное.
       </footer>
+      <Analytics />
     </div>
   )
 }
